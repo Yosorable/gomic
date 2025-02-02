@@ -1,0 +1,5 @@
+host: 127.0.0.1
+port: 8080
+log-level: debug
+data: "D:\\workspace\\tmp\\p\\server-data"
+media: "D:\\workspace\\tmp\\p\\cos"
