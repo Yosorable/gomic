@@ -19,6 +19,7 @@ if [[ "$DO_NOT_BUILD_FRONTEND" == "false" ]];then
   fi
   echo "Frontend build completed."
   cd ..
+  touch assets/web/.gitkeep
 fi
 
 echo "Building backend for ${GOOS}/${GOARCH}..."
