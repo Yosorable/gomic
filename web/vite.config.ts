@@ -20,7 +20,7 @@ export default defineConfig({
         target: "http://localhost:8080",
         changeOrigin: true,
       },
-      "/cover": {
+      "/thumb": {
         target: "http://localhost:8080",
         changeOrigin: true,
       },
