@@ -1,15 +1,16 @@
 import { useParams } from "@solidjs/router";
 import { createSignal, onMount, Show } from "solid-js";
 import api, { Archive } from "../../api/api";
-import NavBar from "../components/NavBar";
 import ArchiveList from "../components/ArchiveList";
-import { Title } from "@solidjs/meta";
+import { useTitle } from "../../signal/title";
 
 export default function Author() {
   const params = useParams();
   const [archives, setArchives] = createSignal<Archive[]>([]);
   const [isLoading, setIsLoading] = createSignal(true);
+  const [_, setTitle] = useTitle();
   onMount(() => {
+    setTitle("作者: " + params.name);
     api
       .getArchiveByAuthorName(params.name)
       .then((res) => {
@@ -23,13 +24,9 @@ export default function Author() {
   });
   return (
     <>
-      <Title>{decodeURIComponent(params.name)}</Title>
-      <div class="main-box">
-        <NavBar />
-        <Show when={!isLoading()}>
-          <ArchiveList archives={archives()} />
-        </Show>
-      </div>
+      <Show when={!isLoading()}>
+        <ArchiveList archives={archives()} />
+      </Show>
     </>
   );
 }

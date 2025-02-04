@@ -1,13 +1,15 @@
 import { createSignal, onMount, Show } from "solid-js";
 import api, { Archive } from "../../api/api";
-import NavBar from "../components/NavBar";
 import ArchiveList from "../components/ArchiveList";
-import { Title } from "@solidjs/meta";
+import { useTitle } from "../../signal/title";
 
 export default function Home() {
   const [archives, setArchives] = createSignal<Archive[]>([]);
   const [isLoading, setIsLoading] = createSignal(true);
+  const [_, setTitle] = useTitle();
+
   onMount(() => {
+    setTitle("首页");
     api
       .getAllArchives()
       .then((res) => {
@@ -21,13 +23,9 @@ export default function Home() {
   });
   return (
     <>
-      <Title>首页</Title>
-      <div class="main-box">
-        <NavBar />
-        <Show when={!isLoading()}>
-          <ArchiveList archives={archives()} />
-        </Show>
-      </div>
+      <Show when={!isLoading()}>
+        <ArchiveList archives={archives()} />
+      </Show>
     </>
   );
 }

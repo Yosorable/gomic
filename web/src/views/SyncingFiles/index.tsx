@@ -1,14 +1,15 @@
-import { Title } from "@solidjs/meta";
-import NavBar from "../components/NavBar";
 import { onMount } from "solid-js";
 import { createSignal, For } from "solid-js";
 import api from "../../api/api";
+import { useTitle } from "../../signal/title";
 
 export default function SyncingFiles() {
   const [status, setStatus] = createSignal(false);
   const [records, setRecords] = createSignal<string[]>([]);
   const [msg, setMsg] = createSignal("");
+  const [_, setTitle] = useTitle();
   onMount(() => {
+    setTitle("同步");
     refreshStatus();
   });
 
@@ -30,25 +31,31 @@ export default function SyncingFiles() {
 
   return (
     <>
-      <Title>同步文件</Title>
-      <div class="main-box">
-        <NavBar />
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-          }}
+      <div
+        style={{
+          display: "flex",
+          gap: "10px",
+        }}
+      >
+        <button
+          class="p-1 rounded bg-gray-500 active:bg-gray-400"
+          onClick={startSyncing}
         >
-          <button onClick={startSyncing}>start</button>
-          <button onClick={refreshStatus}>status</button>
-        </div>
+          start
+        </button>
+        <button
+          class="p-1 rounded bg-gray-500 active:bg-gray-400"
+          onClick={refreshStatus}
+        >
+          status
+        </button>
+      </div>
 
-        <div>msg: {msg()}</div>
-        <div>status: {status() ? "syncing" : "idle"}</div>
-        <div>
-          <div>records:</div>
-          <For each={records()}>{(item) => <div>{item}</div>}</For>
-        </div>
+      <div>msg: {msg()}</div>
+      <div>status: {status() ? "syncing" : "idle"}</div>
+      <div>
+        <div>records:</div>
+        <For each={records()}>{(item) => <div>{item}</div>}</For>
       </div>
     </>
   );

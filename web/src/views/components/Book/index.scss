@@ -1,0 +1,17 @@
+.book-item {
+  .cover {
+    width: 8.5rem;
+    height: 12rem;
+    object-fit: cover;
+  }
+  border-radius: 15px;
+  overflow: hidden;
+  transition: box-shadow 0.2s, opacity 0.5s;
+  box-shadow: 0 0 3px 0 gray;
+}
+
+.book-item:hover {
+  text-decoration: underline;
+  background-color: #1b1c1e;
+  box-shadow: 0 0 15px 0 gray;
+}
