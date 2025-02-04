@@ -62,7 +62,9 @@ export default function Layout({ children }: { children: JSX.Element }) {
             <Menu size={24} />
           </button>
 
-          <h1 class="text-lg font-semibold lg:pl-64">{title()}</h1>
+          <h1 class="text-lg font-semibold lg:pl-64 line-clamp-1 overflow-ellipsis">
+            {title()}
+          </h1>
 
           <div class="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
             <User size={24} class="text-white" />

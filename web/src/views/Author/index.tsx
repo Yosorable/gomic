@@ -10,7 +10,7 @@ export default function Author() {
   const [isLoading, setIsLoading] = createSignal(true);
   const [_, setTitle] = useTitle();
   onMount(() => {
-    setTitle("作者: " + params.name);
+    setTitle("作者: " + decodeURIComponent(params.name));
     api
       .getArchiveByAuthorName(params.name)
       .then((res) => {
