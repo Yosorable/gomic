@@ -11,15 +11,15 @@ func setUpApi(r *gin.RouterGroup) {
 	{
 		ctr := controller.ScannerController
 		scanner.POST("/start", ctr.Start)
-		scanner.GET("/status", ctr.Status)
+		scanner.POST("/status", ctr.Status)
 	}
 
 	archive := r.Group("/archive")
 	{
 		ctr := controller.ArchiveController
-		archive.GET("/authors", ctr.GetAllAuthorNames)
-		archive.GET("/author/:name", ctr.GetArchivesByAuthorName)
-		archive.GET("/all", ctr.GetAllArchives)
-		archive.GET("/name/:name", ctr.GetArchiveByName)
+		archive.POST("/authors", ctr.GetAllAuthors)
+		archive.POST("/author/:name", ctr.GetArchivesByAuthorName)
+		archive.POST("/all", ctr.GetAllArchives)
+		archive.POST("/files/:archive_id", ctr.GetArchiveFilesByID)
 	}
 }

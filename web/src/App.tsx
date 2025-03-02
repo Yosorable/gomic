@@ -5,6 +5,10 @@ import Layout from "./views/components/Layout";
 
 const routes = [
   {
+    path: "/login",
+    component: lazy(() => import("./views/Login")),
+  },
+  {
     path: "/home",
     component: lazy(() => import("./views/Home")),
   },
@@ -17,7 +21,7 @@ const routes = [
     component: lazy(() => import("./views/Author")),
   },
   {
-    path: "/viewer/:name",
+    path: "/viewer/:id",
     component: lazy(() => import("./views/Viewer")),
   },
   {
@@ -35,7 +39,10 @@ export default function App() {
     <HashRouter
       root={(props) => (
         <Show
-          when={!props.location.pathname.startsWith("/viewer")}
+          when={
+            !props.location.pathname.startsWith("/viewer") &&
+            !props.location.pathname.startsWith("/login")
+          }
           fallback={props.children}
         >
           <Layout>

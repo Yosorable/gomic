@@ -6,8 +6,11 @@ import (
 	"github.com/disintegration/imaging"
 )
 
-func CreateImageThumb(filePath, thumbFilePath string) (error) {
-	fileImg, err := os.Open(filePath) 
+func CreateImageThumb(filePath, thumbFilePath string) error {
+	if FileExists(thumbFilePath) {
+		return nil
+	}
+	fileImg, err := os.Open(filePath)
 	if err != nil {
 		return err
 	}

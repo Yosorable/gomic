@@ -1,9 +1,9 @@
 import { createSignal, For, onMount } from "solid-js";
-import api from "../../api/api";
+import api, { Author } from "../../api/api";
 import { useTitle } from "../../signal/title";
 
 export default function Authors() {
-  const [author, setAuthor] = createSignal<string[]>([]);
+  const [author, setAuthor] = createSignal<Author[]>([]);
   const [_, setTitle] = useTitle();
   onMount(() => {
     setTitle("作者");
@@ -19,8 +19,8 @@ export default function Authors() {
         <div class="tag-box">
           <For each={author()}>
             {(item) => (
-              <a class="tag" href={"/author/" + item}>
-                {item}
+              <a class="tag" href={"/author/" + item.name}>
+                {item.name}
               </a>
             )}
           </For>

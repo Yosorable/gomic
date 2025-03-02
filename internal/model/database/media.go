@@ -1,17 +1,16 @@
 package database
 
 type Author struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	Folder      string `json:"folder"`
-	CoverFileId int    `json:"cover_file_id"`
+	Base
+	Name        string `gorm:"uniqueIndex"`
+	CoverFileID *uint
 }
 
 type Archive struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	CoverFileId int    `json:"cover_file_id"`
-	AuthorID    int    `json:"author_id"`
+	Base
+	Name        string `gorm:"index"`
+	CoverFileID *uint
+	AuthorID    *uint `gorm:"index"`
 }
 
 type ArchiveFileType uint8
@@ -22,9 +21,14 @@ const (
 )
 
 type ArchiveFile struct {
-	ID        int             `json:"id"`
-	Name      string          `json:"name"`
-	Path      string          `json:"path"`
-	ArchiveID int             `json:"archive_id"`
-	FileType  ArchiveFileType `json:"file_type"`
+	Base
+	Name      string
+	Path      string
+	ArchiveID uint `gorm:"index"`
+	FileType  ArchiveFileType
+}
+
+type CacheFile struct {
+	Base
+	Path string
 }

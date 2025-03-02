@@ -10,10 +10,10 @@ export default function Viewer() {
   const params = useParams();
   const [_, setTitle] = useTitle();
   onMount(() => {
-    setTitle(decodeURIComponent(params.name));
-    api.getArchiveByName(params.name).then((res) => {
+    api.getArchiveByID(params.id).then((res) => {
       if (res.code === 0) {
         setFiles(res.data.files);
+        setTitle(res.data.name)
       }
     });
   });

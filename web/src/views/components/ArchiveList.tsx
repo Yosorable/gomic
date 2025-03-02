@@ -9,7 +9,7 @@ export default function ArchiveList({ archives }: { archives: Archive[] }) {
         {(item) => (
           <Book
             cover={item.cover_url}
-            target={"/viewer/" + item.name}
+            target={"/viewer/" + item.id}
             title={item.name}
           />
         )}

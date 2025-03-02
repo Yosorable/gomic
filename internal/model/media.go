@@ -16,7 +16,7 @@ type Archive struct {
 }
 
 type AuthorMedia struct {
-	ID       int       `json: "id`
+	ID       int       `json:"id"`
 	Name     string    `json:"name"`
 	Archives []Archive `json:"archives,omitempty"`
 	CoverURL string    `json:"cover_url"`

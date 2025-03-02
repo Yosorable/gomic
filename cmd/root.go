@@ -22,7 +22,7 @@ var (
 		Long:  `A golang web server with frontend`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			initial.SetLogrusAndGinFromConfigLogLevel()
-			initial.RefreshTmpDB()
+			initial.InitDBSqlite()
 
 			r, err := route.CreateRoute()
 			if err != nil {

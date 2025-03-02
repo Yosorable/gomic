@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,100 +9,54 @@ import (
 	"time"
 
 	"github.com/Yosorable/gomic/internal/global"
-	"github.com/Yosorable/gomic/internal/model"
+	"github.com/Yosorable/gomic/internal/model/database"
 	"github.com/Yosorable/gomic/internal/utils"
-
 	"github.com/sirupsen/logrus"
 )
 
-func ScanDirs() error {
+func ScanArchives() error {
 	if !global.SCANNING_MUTEX.TryLock() {
 		if global.IS_SERVER_SCANNING {
-			return errors.New("正在执行扫描")
+			return errors.New("scanning")
 		}
-		return errors.New("服务器错误")
+		return errors.New("server error")
 	}
 	global.IS_SERVER_SCANNING = true
+
 	go func() {
+		var err error = nil
+
 		defer global.SCANNING_MUTEX.Unlock()
 		defer func() { global.IS_SERVER_SCANNING = false }()
 
-		// scan dirs
 		start := time.Now()
-		files, err := os.ReadDir(global.CONFIG.Media)
+		defer func() {
+			if err == nil {
+				duration := time.Since(start)
+				logrus.Infof("Scan file success, cost: %v", duration)
+				global.TMP_SYNC_RECORD = append(global.TMP_SYNC_RECORD, fmt.Sprintf(
+					"start: %s, cost: %v",
+					start.Format("2006-01-02 15:04:05"),
+					duration,
+				))
+			} else {
+				logrus.Infof("Scan file failed: %v", err)
+			}
+		}()
+
+		files, err := os.ReadDir(global.CONFIG.MediaPath)
+
 		if err != nil {
-			logrus.Error("scan files error", err)
 			return
 		}
-		var allMedias = []*model.AuthorMedia{}
+
 		for _, dir := range files {
 			if !dir.IsDir() {
 				continue
 			}
-			if r, err := scanDirectory(filepath.Join(global.CONFIG.Media, dir.Name())); err == nil {
-				allMedias = append(allMedias, r)
-			}
-		}
-
-		if !utils.FileExists(filepath.Join(global.CONFIG.Data, "thumb")) {
-			os.MkdirAll(filepath.Join(global.CONFIG.Data, "thumb"), 0700)
-		}
-
-		auid := 0
-		arid := 0
-		fid := 0
-		for i := 0; i < len(allMedias); i++ {
-			auid++
-			allMedias[i].ID = auid
-			for j := 0; j < len(allMedias[i].Archives); j++ {
-				arid++
-				allMedias[i].Archives[j].ID = arid
-				for k := 0; k < len(allMedias[i].Archives[j].Files); k++ {
-					if allMedias[i].CoverURL == "" && utils.IsPicture(allMedias[i].Archives[j].Files[k].Name) {
-						file := allMedias[i].Archives[j].Files[k]
-						ext := filepath.Ext(file.Path)
-						coverPath := filepath.Join(global.CONFIG.Data, "thumb", file.UUID) + ext
-						coverURL := file.URL
-						if !utils.FileExists(coverPath) {
-							if err := utils.CreateImageThumb(file.Path, coverPath); err == nil {
-								coverURL = "/thumb/" + file.UUID + ext
-							}
-						} else {
-							coverURL = "/thumb/" + file.UUID + ext
-						}
-						allMedias[i].CoverURL = coverURL
-					}
-					if allMedias[i].Archives[j].CoverURL == "" && utils.IsPicture(allMedias[i].Archives[j].Files[k].Name) {
-						file := allMedias[i].Archives[j].Files[k]
-						ext := filepath.Ext(file.Path)
-						coverPath := filepath.Join(global.CONFIG.Data, "thumb", file.UUID) + ext
-						coverURL := file.URL
-						if !utils.FileExists(coverPath) {
-							if err := utils.CreateImageThumb(file.Path, coverPath); err == nil {
-								coverURL = "/thumb/" + file.UUID + ext
-							}
-						} else {
-							coverURL = "/thumb/" + file.UUID + ext
-						}
-						allMedias[i].Archives[j].CoverURL = coverURL
-					}
-					fid++
-					allMedias[i].Archives[j].Files[k].ID = fid
-				}
-			}
-		}
-
-		duration := time.Now().Sub(start)
-		logrus.Infof("Scan file success, cost: %v", duration)
-		global.TMP_SYNC_RECORD = append(
-			global.TMP_SYNC_RECORD, 
-			fmt.Sprintf("start: %s, cost: %v", start.Format("2006-01-02 15:04:05"), duration),
-		)
-
-		global.TMP_MEMORY_DB = allMedias
-		if data, err := json.MarshalIndent(allMedias, "", "  "); err == nil {
-			if err := os.WriteFile(filepath.Join(global.CONFIG.Data, "db.json"), data, 0700); err == nil {
-				logrus.Info("Write to json file success")
+			err = scanForAuthor(dir.Name())
+			if err != nil {
+				return
 			}
 		}
 
@@ -112,104 +65,255 @@ func ScanDirs() error {
 	return nil
 }
 
-func scanDirectory(dir string) (*model.AuthorMedia, error) {
-	filesMap := make(map[string]map[string][]string)
+func scanForAuthor(name string) error {
+	db := global.DB
+	authorPath := filepath.Join(global.CONFIG.MediaPath, name)
+	var author database.Author
 
-	var authorName = filepath.Base(dir)
+	// find or create author
+	if err := db.Limit(1).Find(&author, "name = ?", name).Error; err != nil {
+		return err
+	}
+
+	if author.ID == 0 {
+		author = database.Author{
+			Name: name,
+		}
+		if err := db.Create(&author).Error; err != nil {
+			return err
+		}
+	}
+
+	// find author's archives
+	archives := []database.Archive{}
+	if err := db.Find(&archives, "author_id = ?", author.ID).Error; err != nil {
+		return err
+	}
+	archiveNameMap := map[string]database.Archive{}
+	for _, ele := range archives {
+		archiveNameMap[ele.Name] = ele
+	}
+
+	// scan author folder's folders (archives on disk)
+	filesMap := make(map[string][]string) // archive->files
 	var scan func(string, int)
 	scan = func(path string, level int) {
 		files, err := os.ReadDir(path)
 		if err != nil {
-			logrus.Error("Error reading directory:", err)
+			logrus.Errorf("Error reading directory: %v", err)
 			return
-		}
-
-		dirName := filepath.Base(path)
-
-		if level == 0 {
-			filesMap[dirName] = make(map[string][]string)
 		}
 
 		var fileList []string
 		for _, file := range files {
 			if file.IsDir() {
+				if level == 0 {
+					filesMap[file.Name()] = []string{}
+				}
 				subDir := filepath.Join(path, file.Name())
 				scan(subDir, level+1)
 			} else {
-				fileList = append(fileList, file.Name())
+				// ignore level 0's files
+				if level > 0 {
+					fileList = append(fileList, file.Name())
+				}
 			}
 		}
 
 		if level > 0 {
 			if len(fileList) > 0 {
-				curr := strings.TrimPrefix(strings.TrimPrefix(path, dir), string(os.PathSeparator))
+				curr := strings.TrimPrefix(strings.TrimPrefix(path, authorPath), string(os.PathSeparator))
+				archiveName := strings.Split(curr, string(os.PathSeparator))[0]
 				// natural sort files
 				utils.NaturalSort(fileList)
-
 				// video and picture files sort
 				images := []string{}
 				videos := []string{}
 				for _, ele := range fileList {
+					filePath := filepath.Join(path, ele)
+					nameInArchive := strings.TrimPrefix(
+						strings.TrimPrefix(filePath, filepath.Join(authorPath, archiveName)),
+						string(os.PathSeparator),
+					)
 					if utils.IsPicture(ele) {
-						images = append(images, ele)
+						images = append(images, nameInArchive)
 					} else if utils.IsVideo(ele) {
-						videos = append(videos, ele)
+						videos = append(videos, nameInArchive)
 					}
 				}
 				var finalFiles = make([]string, 0, len(images)+len(videos))
 				finalFiles = append(finalFiles, images...)
 				finalFiles = append(finalFiles, videos...)
-				filesMap[authorName][curr] = finalFiles
+				filesMap[archiveName] = append(filesMap[archiveName], finalFiles...)
 			}
 		}
 	}
+	scan(authorPath, 0)
 
-	scan(dir, 0)
-
-	// transform to struct and natural sort folders
-	mp := filesMap[authorName]
-	res := &model.AuthorMedia{
-		Name:     authorName,
-		Archives: make([]model.Archive, 0, len(mp)),
+	// natural sort archive (on disk) names
+	archiveOnDiskNames := make([]string, 0, len(filesMap))
+	for k, _ := range filesMap {
+		archiveOnDiskNames = append(archiveOnDiskNames, k)
 	}
-	existedMap := make(map[string]int, len(mp))
+	utils.NaturalSort(archiveOnDiskNames)
 
-	archiveName := make([]string, 0, len(mp))
-	for k := range mp {
-		archiveName = append(archiveName, k)
-	}
-	utils.NaturalSort(archiveName)
-	for _, ele := range archiveName {
-		secondFolderName := ele
-		archiveName := strings.Split(ele, string(os.PathSeparator))[0]
+	// handle db
+	for _, aname := range archiveOnDiskNames {
+		arcOnDB, exist := archiveNameMap[aname]
+		arcFilesOnDisk := filesMap[aname]
 
-		idx, exist := existedMap[archiveName]
+		// new archive with new files
 		if !exist {
-			idx = len(res.Archives)
-			existedMap[archiveName] = idx
-			archive := model.Archive{
-				Name:  archiveName,
-				Files: make([]model.ArchiveFile, 0, len(mp[ele])),
+			var auID uint = author.ID
+			newArchive := &database.Archive{
+				Name:     aname,
+				AuthorID: &auID,
 			}
-			res.Archives = append(res.Archives, archive)
+			if err := db.Create(newArchive).Error; err != nil {
+				return err
+			}
+
+			var arcFiles = make([]*database.ArchiveFile, 0, len(arcFilesOnDisk))
+			for _, item := range arcFilesOnDisk {
+				newArchiveFile := &database.ArchiveFile{
+					Name:      item,
+					Path:      filepath.Join(authorPath, aname, item),
+					ArchiveID: newArchive.ID,
+				}
+				if utils.IsPicture(item) {
+					newArchiveFile.FileType = database.PICTURE_FILE
+				} else if utils.IsVideo(item) {
+					newArchiveFile.FileType = database.VIDEO_FILE
+				} else {
+					// unsupported files
+					continue
+				}
+				arcFiles = append(arcFiles, newArchiveFile)
+			}
+
+			db.Create(arcFiles)
+
+			continue
 		}
 
-		for _, f := range mp[ele] {
-			path := filepath.Join(dir, string(os.PathSeparator)+secondFolderName+string(os.PathSeparator)+f)
+		// exist archive
+		arcFilesOnDB := []*database.ArchiveFile{}
+		if err := db.Find(&arcFilesOnDB, "archive_id = ?", arcOnDB.ID).Error; err != nil {
+			return err
+		}
 
-			md5, err := utils.CalculateStringMD5(path)
-			if err != nil {
-				logrus.Error("Calculate file md5 error:", err)
+		arcFilesToAddFromDisk := []*database.ArchiveFile{}
+		arcFileIDsToDelete := []uint{}
+		arcFileDBNameToID := map[string]uint{}
+		arcFileDiskNameMap := map[string]bool{}
+
+		for _, ele := range arcFilesOnDB {
+			arcFileDBNameToID[ele.Name] = ele.ID
+		}
+		for _, ele := range arcFilesOnDisk {
+			arcFileDiskNameMap[ele] = true
+		}
+
+		for _, ele := range arcFilesOnDisk {
+			_, exist := arcFileDBNameToID[ele]
+			if exist {
 				continue
 			}
-			res.Archives[idx].Files = append(res.Archives[idx].Files, model.ArchiveFile{
-				UUID: md5,
-				Name: f,
-				Path: path,
-				URL:  global.MEDIA_SERVER_PREFIX + strings.ReplaceAll(strings.TrimPrefix(path, global.CONFIG.Media), string(os.PathSeparator), "/"),
+			arcFilesToAddFromDisk = append(arcFilesToAddFromDisk, &database.ArchiveFile{
+				Name:      ele,
+				Path:      filepath.Join(authorPath, aname, ele),
+				ArchiveID: arcOnDB.ID,
 			})
+		}
+
+		for _, ele := range arcFilesOnDB {
+			_, exist := arcFileDiskNameMap[ele.Name]
+			if exist {
+				continue
+			}
+			arcFileIDsToDelete = append(arcFileIDsToDelete, ele.ID)
+		}
+
+		if len(arcFilesToAddFromDisk) > 0 {
+			if err := db.Create(arcFilesToAddFromDisk).Error; err != nil {
+				return err
+			}
+		}
+		if len(arcFileIDsToDelete) > 0 {
+			if err := db.Delete([]database.ArchiveFile{}, arcFileIDsToDelete).Error; err != nil {
+				return err
+			}
+		}
+	}
+	for _, ele := range archives {
+		aname := ele.Name
+		_, exist := filesMap[aname]
+		if !exist {
+			db.Delete(&database.ArchiveFile{}, "archive_id = ?", ele.ID)
+			db.Delete(&ele)
 		}
 	}
 
-	return res, nil
+	generateCoversForAuthor(author.ID)
+
+	return nil
+}
+
+func generateCoversForAuthor(authorID uint) {
+	db := global.DB
+
+	author := database.Author{}
+	if err := db.Where("id = ?", authorID).Take(&author).Error; err != nil {
+		logrus.Errorf("generateCoversForAuthor error: %v", err)
+		return
+	}
+
+	archives := []database.Archive{}
+	if err := db.Where("author_id = ?", authorID).Find(&archives).Error; err != nil {
+		logrus.Errorf("generateCoversForAuthor error: %v", err)
+		return
+	}
+	for _, ele := range archives {
+		if ele.CoverFileID == nil {
+			var coverFilePath string
+			db.Model(&database.ArchiveFile{}).Select("path").Where("archive_id = ?", ele.ID).Limit(1).Find(&coverFilePath)
+			if utils.IsPicture(coverFilePath) {
+				ext := filepath.Ext(coverFilePath)
+				hash, err := utils.CalculateStringMD5(coverFilePath)
+				if err == nil {
+					finalPath := filepath.Join(global.CONFIG.DataPath, "thumb", hash) + ext
+					err = utils.CreateImageThumb(
+						coverFilePath,
+						finalPath,
+					)
+					if err == nil {
+						cacheFile := database.CacheFile{
+							Path: finalPath,
+						}
+						err = db.Create(&cacheFile).Error
+						if err == nil {
+							cID := cacheFile.ID
+							ele.CoverFileID = &cID
+							db.Model(&ele).Update("cover_file_id", cID)
+						} else {
+							logrus.Errorf("generateCoversForAuthor error: %v", err)
+						}
+					} else {
+						logrus.Errorf("generateCoversForAuthor error: %v", err)
+					}
+				} else {
+					logrus.Errorf("generateCoversForAuthor error: %v", err)
+				}
+			}
+		}
+
+		if author.CoverFileID == nil && ele.CoverFileID != nil {
+			cID := ele.CoverFileID
+			author.CoverFileID = cID
+			err := db.Model(&author).Update("cover_file_id", cID).Error
+			if err != nil {
+				logrus.Errorf("generateCoversForAuthor error: %v", err)
+			}
+		}
+	}
 }

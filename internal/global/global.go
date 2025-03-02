@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/Yosorable/gomic/internal/config"
-	"github.com/Yosorable/gomic/internal/model"
+	"gorm.io/gorm"
 )
 
 var (
@@ -15,7 +15,9 @@ var (
 	SCANNING_MUTEX      = &sync.Mutex{}
 	IS_SERVER_SCANNING  = false
 	MEDIA_SERVER_PREFIX = "/media"
+
+	DB             *gorm.DB
+	SKIP_AUTH_PATH = []string{"/login", "/media", "/thumb"}
 )
 
-var TMP_MEMORY_DB []*model.AuthorMedia = []*model.AuthorMedia{}
 var TMP_SYNC_RECORD []string = []string{}

@@ -11,7 +11,7 @@ import (
 type scannerController struct{}
 
 func (*scannerController) Start(c *gin.Context) {
-	if err := handler.ScanDirs(); err != nil {
+	if err := handler.ScanArchives(); err != nil {
 		response.FailWithError(err, c)
 		return
 	}
@@ -20,7 +20,7 @@ func (*scannerController) Start(c *gin.Context) {
 
 func (*scannerController) Status(c *gin.Context) {
 	response.OkWithData(gin.H{
-		"status": global.IS_SERVER_SCANNING,
+		"status":  global.IS_SERVER_SCANNING,
 		"records": global.TMP_SYNC_RECORD,
 	}, c)
 }

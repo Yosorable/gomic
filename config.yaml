@@ -3,3 +3,4 @@ port: 8080
 log-level: debug
 data: "D:\\workspace\\tmp\\p\\server-data"
 media: "D:\\workspace\\tmp\\p\\cos"
+secret: "asjdjqj12389shdkj"
